@@ -1,0 +1,405 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Virtual Family Bank Application
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        DYNAMODB_TABLE_NAME: !Ref FamilyBankTable
+        COGNITO_USER_POOL_ID: !Ref UserPool
+        COGNITO_CLIENT_ID: !Ref UserPoolClient
+        COGNITO_REGION: !Ref AWS::Region
+        LOG_LEVEL: INFO
+        USE_ROLE_GSI: 'true'
+  Api:
+    Cors:
+      AllowOrigin: "'*'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+  GoogleClientId:
+    Type: String
+    Description: Google OAuth Client ID
+    Default: ''
+  GoogleClientSecret:
+    Type: String
+    Description: Google OAuth Client Secret
+    NoEcho: true
+    Default: ''
+
+Conditions:
+  HasGoogleOAuth: !Not [!Equals [!Ref GoogleClientId, '']]
+
+Resources:
+  # ============================================
+  # DynamoDB Table
+  # ============================================
+  FamilyBankTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'FamilyBank-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: FamilyBank
+
+  # ============================================
+  # Cognito User Pool
+  # ============================================
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub 'FamilyBank-${Environment}'
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: false
+        - Name: name
+          Required: true
+          Mutable: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      UserPoolTags:
+        Environment: !Ref Environment
+        Application: FamilyBank
+
+  # Cognito Groups
+  ParentsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Parents
+      UserPoolId: !Ref UserPool
+      Description: Parent users who can manage children accounts
+
+  ChildrenGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Children
+      UserPoolId: !Ref UserPool
+      Description: Child users with view-only access
+
+  # Cognito User Pool Client
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub 'FamilyBank-Web-${Environment}'
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+        - !If [HasGoogleOAuth, Google, !Ref AWS::NoValue]
+      CallbackURLs:
+        - !Sub 'https://${Environment}.familybank.example.com/callback'
+        - 'http://localhost:5173/callback'
+      LogoutURLs:
+        - !Sub 'https://${Environment}.familybank.example.com/logout'
+        - 'http://localhost:5173/logout'
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+
+  # Google Identity Provider (conditional)
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogleOAuth
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: 'email openid profile'
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+
+  # Cognito Domain
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub 'familybank-${Environment}-${AWS::AccountId}'
+      UserPoolId: !Ref UserPool
+
+  # ============================================
+  # API Gateway
+  # ============================================
+  FamilyBankApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowOrigin: "'*'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      TracingEnabled: true
+      Tags:
+        Environment: !Ref Environment
+        Application: FamilyBank
+
+  # ============================================
+  # Lambda Functions - Auth
+  # ============================================
+  GetUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.auth.get_user.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref FamilyBankTable
+      Events:
+        GetUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FamilyBankApi
+            Path: /user
+            Method: GET
+
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.auth.update_user.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FamilyBankTable
+      Events:
+        UpdateUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FamilyBankApi
+            Path: /user
+            Method: POST
+
+  # ============================================
+  # Lambda Functions - Family
+  # ============================================
+  ListChildrenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.family.list_children.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref FamilyBankTable
+      Events:
+        ListChildren:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FamilyBankApi
+            Path: /children
+            Method: GET
+
+  GetChildSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.family.get_child_summary.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref FamilyBankTable
+      Events:
+        GetChild:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FamilyBankApi
+            Path: /children/{childId}
+            Method: GET
+
+  CreateChildFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.family.create_child.lambda_handler
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref UserPool
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FamilyBankTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminSetUserPassword
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        CreateChild:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FamilyBankApi
+            Path: /children
+            Method: POST
+
+  # ============================================
+  # Lambda Functions - Transactions
+  # ============================================
+  ListTransactionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.transactions.list_transactions.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref FamilyBankTable
+      Events:
+        ListTransactions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FamilyBankApi
+            Path: /transactions
+            Method: GET
+
+  AdjustBalanceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.transactions.adjust_balance.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FamilyBankTable
+      Events:
+        AdjustBalance:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FamilyBankApi
+            Path: /adjust-balance
+            Method: POST
+
+  # ============================================
+  # Lambda Functions - Interest Calculation
+  # ============================================
+  CalculateInterestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambdas.interest.calculate_interest.lambda_handler
+      Timeout: 300
+      MemorySize: 1024
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FamilyBankTable
+      Events:
+        MonthlyTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: 'cron(0 0 1 * ? *)'
+            Description: Calculate monthly interest for all children
+            Enabled: true
+
+# ============================================
+# Outputs
+# ============================================
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${FamilyBankApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolId'
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+
+  CognitoHostedUIDomain:
+    Description: Cognito Hosted UI Domain
+    Value: !Sub 'https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com'
+    Export:
+      Name: !Sub '${AWS::StackName}-CognitoHostedUIDomain'
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref FamilyBankTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+
+  ParentsGroupName:
+    Description: Parents Cognito Group Name
+    Value: !Ref ParentsGroup
+
+  ChildrenGroupName:
+    Description: Children Cognito Group Name
+    Value: !Ref ChildrenGroup

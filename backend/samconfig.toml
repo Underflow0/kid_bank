@@ -1,0 +1,46 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "family-bank-dev"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+parameter_overrides = "Environment=dev GoogleClientId=\"\" GoogleClientSecret=\"\""
+region = "us-east-1"
+
+[default.local_start_api.parameters]
+docker_network = "sam-local"
+warm_containers = "EAGER"
+parameter_overrides = "Environment=dev GoogleClientId=\"\" GoogleClientSecret=\"\""
+
+[default.local_invoke.parameters]
+parameter_overrides = "Environment=dev GoogleClientId=\"\" GoogleClientSecret=\"\""
+
+[staging]
+[staging.global.parameters]
+stack_name = "family-bank-staging"
+
+[staging.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+parameter_overrides = "Environment=staging"
+region = "us-east-1"
+
+[prod]
+[prod.global.parameters]
+stack_name = "family-bank-prod"
+
+[prod.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+parameter_overrides = "Environment=prod"
+region = "us-east-1"
