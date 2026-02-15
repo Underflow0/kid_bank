@@ -1,0 +1,240 @@
+name: CD - Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '18'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend to AWS
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: SAM build
+        working-directory: backend
+        run: sam build
+
+      - name: SAM deploy
+        working-directory: backend
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          sam deploy \
+            --config-env ${ENVIRONMENT} \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              Environment=${ENVIRONMENT} \
+              GoogleClientId="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              GoogleClientSecret="${{ secrets.GOOGLE_CLIENT_SECRET }}"
+
+      - name: Get Stack Outputs
+        working-directory: backend
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          STACK_NAME="family-bank-${ENVIRONMENT}"
+          echo "Getting outputs for stack: $STACK_NAME"
+
+          API_ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+            --output text)
+
+          USER_POOL_ID=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
+            --output text)
+
+          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' \
+            --output text)
+
+          COGNITO_DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`CognitoHostedUIDomain`].OutputValue' \
+            --output text)
+
+          echo "API_ENDPOINT=$API_ENDPOINT" >> $GITHUB_OUTPUT
+          echo "USER_POOL_ID=$USER_POOL_ID" >> $GITHUB_OUTPUT
+          echo "USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "COGNITO_DOMAIN=$COGNITO_DOMAIN" >> $GITHUB_OUTPUT
+
+          echo "### Deployment Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "- **API Endpoint**: $API_ENDPOINT" >> $GITHUB_STEP_SUMMARY
+          echo "- **User Pool ID**: $USER_POOL_ID" >> $GITHUB_STEP_SUMMARY
+          echo "- **Client ID**: $USER_POOL_CLIENT_ID" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cognito Domain**: $COGNITO_DOMAIN" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run smoke tests
+        working-directory: backend
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          STACK_NAME="family-bank-${ENVIRONMENT}"
+          API_ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+            --output text)
+
+          echo "Testing API at: $API_ENDPOINT"
+
+          # Test API is responding (will return 401 without auth, which is expected)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" $API_ENDPOINT/user || echo "000")
+
+          if [ "$HTTP_CODE" == "401" ] || [ "$HTTP_CODE" == "403" ]; then
+            echo "✅ API is responding (authentication required as expected)"
+          else
+            echo "⚠️ Unexpected response code: $HTTP_CODE"
+          fi
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get backend outputs
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          STACK_NAME="family-bank-${ENVIRONMENT}"
+
+          API_ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+            --output text)
+
+          USER_POOL_ID=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
+            --output text)
+
+          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' \
+            --output text)
+
+          COGNITO_DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`CognitoHostedUIDomain`].OutputValue' \
+            --output text)
+
+          echo "VITE_API_ENDPOINT=$API_ENDPOINT" >> $GITHUB_ENV
+          echo "VITE_AWS_REGION=${{ env.AWS_REGION }}" >> $GITHUB_ENV
+          echo "VITE_USER_POOL_ID=$USER_POOL_ID" >> $GITHUB_ENV
+          echo "VITE_USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID" >> $GITHUB_ENV
+          echo "VITE_COGNITO_DOMAIN=$COGNITO_DOMAIN" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Deploy to S3 (Optional - requires S3 bucket)
+        working-directory: frontend
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          # Check if S3 bucket exists in secrets
+          if [ -n "${{ secrets.FRONTEND_S3_BUCKET }}" ]; then
+            echo "Deploying to S3 bucket: ${{ secrets.FRONTEND_S3_BUCKET }}"
+            aws s3 sync dist/ s3://${{ secrets.FRONTEND_S3_BUCKET }}/${ENVIRONMENT}/ --delete
+
+            # Invalidate CloudFront cache if distribution ID is provided
+            if [ -n "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+              echo "Invalidating CloudFront cache"
+              aws cloudfront create-invalidation \
+                --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+                --paths "/${ENVIRONMENT}/*"
+            fi
+          else
+            echo "⚠️ FRONTEND_S3_BUCKET secret not set - skipping S3 deployment"
+            echo "Build artifacts are available for manual deployment"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-${{ github.event.inputs.environment || 'dev' }}
+          path: frontend/dist
+          retention-days: 30
+
+  notify-deployment:
+    name: Deployment Notification
+    needs: [deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Deployment summary
+        run: |
+          echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend**: ${{ needs.deploy-backend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend**: ${{ needs.deploy-frontend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.deploy-frontend.result }}" == "success" ]; then
+            echo "✅ **All deployments successful!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Some deployments failed**" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,32 @@
+# Automatically label PRs based on changed files
+
+backend:
+  - 'backend/**/*'
+
+frontend:
+  - 'frontend/**/*'
+
+tests:
+  - '**/*test*.py'
+  - '**/*test*.ts'
+  - '**/*test*.tsx'
+  - '**/tests/**/*'
+
+documentation:
+  - '**/*.md'
+  - 'docs/**/*'
+
+ci/cd:
+  - '.github/**/*'
+  - '**/*ci*.yml'
+  - '**/*cd*.yml'
+
+dependencies:
+  - '**/package.json'
+  - '**/package-lock.json'
+  - '**/requirements*.txt'
+
+infrastructure:
+  - 'backend/template.yaml'
+  - 'backend/samconfig.toml'
+  - '**/cloudformation/**/*'
