@@ -2,12 +2,13 @@
 Lambda function to list transactions for a user.
 GET /transactions?userId={userId}&limit={limit}&nextToken={token}
 """
+
 import json
 import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import (
     authorize,
@@ -17,7 +18,7 @@ from common import (
     get_logger,
     FamilyBankError,
     ForbiddenError,
-    MAX_TRANSACTION_PAGINATION_LIMIT
+    MAX_TRANSACTION_PAGINATION_LIMIT,
 )
 
 logger = get_logger(__name__)
@@ -43,14 +44,14 @@ def lambda_handler(event, context):
     try:
         # Get authenticated user
         auth_context = get_auth_context(event)
-        current_user_id = auth_context['userId']
-        groups = auth_context['groups']
+        current_user_id = auth_context["userId"]
+        groups = auth_context["groups"]
 
         # Get query parameters
-        query_params = event.get('queryStringParameters') or {}
-        target_user_id = query_params.get('userId', current_user_id)
-        limit = int(query_params.get('limit', 50))
-        next_token = query_params.get('nextToken')
+        query_params = event.get("queryStringParameters") or {}
+        target_user_id = query_params.get("userId", current_user_id)
+        limit = int(query_params.get("limit", 50))
+        next_token = query_params.get("nextToken")
 
         # Validate limit
         if limit > MAX_TRANSACTION_PAGINATION_LIMIT:
@@ -69,8 +70,10 @@ def lambda_handler(event, context):
             if not target_profile:
                 raise ForbiddenError("User not found")
 
-            if target_profile.get('parentId') != current_user_id:
-                raise ForbiddenError("You can only view your own children's transactions")
+            if target_profile.get("parentId") != current_user_id:
+                raise ForbiddenError(
+                    "You can only view your own children's transactions"
+                )
 
         logger.info(
             f"Fetching transactions for user: {target_user_id}, "
@@ -79,60 +82,60 @@ def lambda_handler(event, context):
 
         # Get transactions
         result = db.get_transactions(target_user_id, limit=limit, next_token=next_token)
-        transactions = result['transactions']
+        transactions = result["transactions"]
 
         # Format response
         transactions_list = [
             {
-                'transactionId': tx['transactionId'],
-                'userId': tx['userId'],
-                'amount': float(tx['amount']),
-                'type': tx['type'],
-                'description': tx['description'],
-                'balanceAfter': float(tx['balanceAfter']),
-                'initiatedBy': tx['initiatedBy'],
-                'timestamp': tx['timestamp']
+                "transactionId": tx["transactionId"],
+                "userId": tx["userId"],
+                "amount": float(tx["amount"]),
+                "type": tx["type"],
+                "description": tx["description"],
+                "balanceAfter": float(tx["balanceAfter"]),
+                "initiatedBy": tx["initiatedBy"],
+                "timestamp": tx["timestamp"],
             }
             for tx in transactions
         ]
 
         response_body = {
-            'transactions': transactions_list,
-            'count': len(transactions_list)
+            "transactions": transactions_list,
+            "count": len(transactions_list),
         }
 
-        if 'nextToken' in result:
-            response_body['nextToken'] = result['nextToken']
+        if "nextToken" in result:
+            response_body["nextToken"] = result["nextToken"]
 
         logger.info(f"Returning {len(transactions_list)} transactions")
 
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps(response_body)
+            "body": json.dumps(response_body),
         }
 
     except FamilyBankError as e:
         logger.warning(f"Business logic error: {str(e)}")
         return {
-            'statusCode': e.status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": e.status_code,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': e.message})
+            "body": json.dumps({"error": e.message}),
         }
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': 'Internal server error'})
+            "body": json.dumps({"error": "Internal server error"}),
         }

@@ -2,6 +2,7 @@
 Lambda function to create a new child account.
 POST /children
 """
+
 import json
 import sys
 import os
@@ -9,7 +10,7 @@ import boto3
 from decimal import Decimal
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import (
     authorize,
@@ -20,13 +21,13 @@ from common import (
     BadRequestError,
     UserRole,
     DEFAULT_CHILD_BALANCE,
-    DEFAULT_INTEREST_RATE
+    DEFAULT_INTEREST_RATE,
 )
 
 logger = get_logger(__name__)
 
 
-@authorize(required_groups=['Parents'])
+@authorize(required_groups=["Parents"])
 def lambda_handler(event, context):
     """
     Create a new child account.
@@ -49,14 +50,16 @@ def lambda_handler(event, context):
     try:
         # Get authenticated parent ID
         auth_context = get_auth_context(event)
-        parent_id = auth_context['userId']
+        parent_id = auth_context["userId"]
 
         # Parse request body
-        body = json.loads(event.get('body', '{}'))
-        name = body.get('name')
-        email = body.get('email')
-        initial_balance = Decimal(str(body.get('initialBalance', DEFAULT_CHILD_BALANCE)))
-        interest_rate = Decimal(str(body.get('interestRate', DEFAULT_INTEREST_RATE)))
+        body = json.loads(event.get("body", "{}"))
+        name = body.get("name")
+        email = body.get("email")
+        initial_balance = Decimal(
+            str(body.get("initialBalance", DEFAULT_CHILD_BALANCE))
+        )
+        interest_rate = Decimal(str(body.get("interestRate", DEFAULT_INTEREST_RATE)))
 
         # Validate required fields
         if not name or not email:
@@ -65,11 +68,12 @@ def lambda_handler(event, context):
         logger.info(f"Creating child account for parent: {parent_id}, email: {email}")
 
         # Create user in Cognito
-        cognito = boto3.client('cognito-idp')
-        user_pool_id = os.environ['COGNITO_USER_POOL_ID']
+        cognito = boto3.client("cognito-idp")
+        user_pool_id = os.environ["COGNITO_USER_POOL_ID"]
 
         # Create user with temporary password
         import uuid
+
         temp_password = f"Temp{uuid.uuid4().hex[:8]}!"
 
         try:
@@ -77,19 +81,19 @@ def lambda_handler(event, context):
                 UserPoolId=user_pool_id,
                 Username=email,
                 UserAttributes=[
-                    {'Name': 'email', 'Value': email},
-                    {'Name': 'email_verified', 'Value': 'true'},
-                    {'Name': 'name', 'Value': name}
+                    {"Name": "email", "Value": email},
+                    {"Name": "email_verified", "Value": "true"},
+                    {"Name": "name", "Value": name},
                 ],
                 TemporaryPassword=temp_password,
-                MessageAction='SUPPRESS'  # Don't send welcome email
+                MessageAction="SUPPRESS",  # Don't send welcome email
             )
 
             # Get the sub (user ID) from Cognito response
             child_id = None
-            for attr in cognito_response['User']['Attributes']:
-                if attr['Name'] == 'sub':
-                    child_id = attr['Value']
+            for attr in cognito_response["User"]["Attributes"]:
+                if attr["Name"] == "sub":
+                    child_id = attr["Value"]
                     break
 
             if not child_id:
@@ -97,9 +101,7 @@ def lambda_handler(event, context):
 
             # Add user to Children group
             cognito.admin_add_user_to_group(
-                UserPoolId=user_pool_id,
-                Username=email,
-                GroupName='Children'
+                UserPoolId=user_pool_id, Username=email, GroupName="Children"
             )
 
             logger.info(f"Created Cognito user: {child_id}")
@@ -120,31 +122,30 @@ def lambda_handler(event, context):
                 role=UserRole.CHILD,
                 parent_id=parent_id,
                 balance=initial_balance,
-                interest_rate=interest_rate
+                interest_rate=interest_rate,
             )
 
             logger.info(f"Created DynamoDB profile for child: {child_id}")
 
             return {
-                'statusCode': 201,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
+                "statusCode": 201,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
                 },
-                'body': json.dumps({
-                    'child': child_profile.to_dict(),
-                    'temporaryPassword': temp_password,
-                    'message': 'Child account created successfully. Please share the temporary password securely.'
-                })
+                "body": json.dumps(
+                    {
+                        "child": child_profile.to_dict(),
+                        "temporaryPassword": temp_password,
+                        "message": "Child account created successfully. Please share the temporary password securely.",
+                    }
+                ),
             }
 
         except Exception as e:
             # If DynamoDB creation fails, try to clean up Cognito user
             try:
-                cognito.admin_delete_user(
-                    UserPoolId=user_pool_id,
-                    Username=email
-                )
+                cognito.admin_delete_user(UserPoolId=user_pool_id, Username=email)
                 logger.warning(f"Cleaned up Cognito user after DynamoDB failure")
             except Exception as cleanup_error:
                 logger.error(f"Failed to clean up Cognito user: {str(cleanup_error)}")
@@ -154,21 +155,21 @@ def lambda_handler(event, context):
     except FamilyBankError as e:
         logger.warning(f"Business logic error: {str(e)}")
         return {
-            'statusCode': e.status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": e.status_code,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': e.message})
+            "body": json.dumps({"error": e.message}),
         }
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': 'Internal server error'})
+            "body": json.dumps({"error": "Internal server error"}),
         }

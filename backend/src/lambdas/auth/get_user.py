@@ -2,12 +2,13 @@
 Lambda function to get current user profile.
 GET /user
 """
+
 import json
 import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import (
     authorize,
@@ -15,7 +16,7 @@ from common import (
     DynamoDBClient,
     get_logger,
     FamilyBankError,
-    NotFoundError
+    NotFoundError,
 )
 
 logger = get_logger(__name__)
@@ -35,7 +36,7 @@ def lambda_handler(event, context):
     try:
         # Get authenticated user ID
         auth_context = get_auth_context(event)
-        user_id = auth_context['userId']
+        user_id = auth_context["userId"]
 
         logger.info(f"Fetching profile for user: {user_id}")
 
@@ -48,44 +49,46 @@ def lambda_handler(event, context):
 
         # Return user profile
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({
-                'user': {
-                    'userId': user_profile['userId'],
-                    'email': user_profile['email'],
-                    'name': user_profile['name'],
-                    'role': user_profile['role'],
-                    'balance': float(user_profile['balance']),
-                    'interestRate': float(user_profile['interestRate']),
-                    'parentId': user_profile.get('parentId'),
-                    'createdAt': user_profile['createdAt'],
-                    'updatedAt': user_profile['updatedAt']
+            "body": json.dumps(
+                {
+                    "user": {
+                        "userId": user_profile["userId"],
+                        "email": user_profile["email"],
+                        "name": user_profile["name"],
+                        "role": user_profile["role"],
+                        "balance": float(user_profile["balance"]),
+                        "interestRate": float(user_profile["interestRate"]),
+                        "parentId": user_profile.get("parentId"),
+                        "createdAt": user_profile["createdAt"],
+                        "updatedAt": user_profile["updatedAt"],
+                    }
                 }
-            })
+            ),
         }
 
     except FamilyBankError as e:
         logger.warning(f"Business logic error: {str(e)}")
         return {
-            'statusCode': e.status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": e.status_code,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': e.message})
+            "body": json.dumps({"error": e.message}),
         }
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': 'Internal server error'})
+            "body": json.dumps({"error": "Internal server error"}),
         }

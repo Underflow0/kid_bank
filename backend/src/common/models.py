@@ -1,6 +1,7 @@
 """
 Data models and constants for Family Bank application.
 """
+
 from enum import Enum
 from typing import Optional
 from dataclasses import dataclass
@@ -10,12 +11,14 @@ from datetime import datetime
 
 class UserRole(str, Enum):
     """User role enum."""
+
     PARENT = "parent"
     CHILD = "child"
 
 
 class TransactionType(str, Enum):
     """Transaction type enum."""
+
     DEPOSIT = "deposit"
     WITHDRAWAL = "withdrawal"
     INTEREST = "interest"
@@ -24,6 +27,7 @@ class TransactionType(str, Enum):
 
 class CognitoGroup(str, Enum):
     """Cognito group names."""
+
     PARENTS = "Parents"
     CHILDREN = "Children"
 
@@ -71,6 +75,7 @@ class KeyPattern:
 @dataclass
 class UserProfile:
     """User profile data model."""
+
     user_id: str
     email: str
     name: str
@@ -84,36 +89,37 @@ class UserProfile:
     def to_dict(self) -> dict:
         """Convert to dictionary for DynamoDB."""
         return {
-            'userId': self.user_id,
-            'email': self.email,
-            'name': self.name,
-            'role': self.role.value,
-            'balance': float(self.balance),
-            'interestRate': float(self.interest_rate),
-            'createdAt': self.created_at,
-            'updatedAt': self.updated_at,
-            'parentId': self.parent_id,
+            "userId": self.user_id,
+            "email": self.email,
+            "name": self.name,
+            "role": self.role.value,
+            "balance": float(self.balance),
+            "interestRate": float(self.interest_rate),
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+            "parentId": self.parent_id,
         }
 
     @classmethod
-    def from_dynamodb_item(cls, item: dict) -> 'UserProfile':
+    def from_dynamodb_item(cls, item: dict) -> "UserProfile":
         """Create from DynamoDB item."""
         return cls(
-            user_id=item['userId'],
-            email=item['email'],
-            name=item['name'],
-            role=UserRole(item['role']),
-            balance=Decimal(str(item['balance'])),
-            interest_rate=Decimal(str(item['interestRate'])),
-            created_at=item['createdAt'],
-            updated_at=item['updatedAt'],
-            parent_id=item.get('parentId'),
+            user_id=item["userId"],
+            email=item["email"],
+            name=item["name"],
+            role=UserRole(item["role"]),
+            balance=Decimal(str(item["balance"])),
+            interest_rate=Decimal(str(item["interestRate"])),
+            created_at=item["createdAt"],
+            updated_at=item["updatedAt"],
+            parent_id=item.get("parentId"),
         )
 
 
 @dataclass
 class Transaction:
     """Transaction data model."""
+
     transaction_id: str
     user_id: str
     amount: Decimal
@@ -126,33 +132,33 @@ class Transaction:
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
         return {
-            'transactionId': self.transaction_id,
-            'userId': self.user_id,
-            'amount': float(self.amount),
-            'type': self.type.value,
-            'description': self.description,
-            'balanceAfter': float(self.balance_after),
-            'initiatedBy': self.initiated_by,
-            'timestamp': self.timestamp,
+            "transactionId": self.transaction_id,
+            "userId": self.user_id,
+            "amount": float(self.amount),
+            "type": self.type.value,
+            "description": self.description,
+            "balanceAfter": float(self.balance_after),
+            "initiatedBy": self.initiated_by,
+            "timestamp": self.timestamp,
         }
 
     @classmethod
-    def from_dynamodb_item(cls, item: dict) -> 'Transaction':
+    def from_dynamodb_item(cls, item: dict) -> "Transaction":
         """Create from DynamoDB item."""
         return cls(
-            transaction_id=item['transactionId'],
-            user_id=item['userId'],
-            amount=Decimal(str(item['amount'])),
-            type=TransactionType(item['type']),
-            description=item['description'],
-            balance_after=Decimal(str(item['balanceAfter'])),
-            initiated_by=item['initiatedBy'],
-            timestamp=item['timestamp'],
+            transaction_id=item["transactionId"],
+            user_id=item["userId"],
+            amount=Decimal(str(item["amount"])),
+            type=TransactionType(item["type"]),
+            description=item["description"],
+            balance_after=Decimal(str(item["balanceAfter"])),
+            initiated_by=item["initiatedBy"],
+            timestamp=item["timestamp"],
         )
 
 
 # Constants
-DEFAULT_INTEREST_RATE = Decimal('0.05')  # 5%
-DEFAULT_CHILD_BALANCE = Decimal('0.00')
+DEFAULT_INTEREST_RATE = Decimal("0.05")  # 5%
+DEFAULT_CHILD_BALANCE = Decimal("0.00")
 TRANSACTION_PAGINATION_LIMIT = 50
 MAX_TRANSACTION_PAGINATION_LIMIT = 100

@@ -2,6 +2,7 @@
 Structured logging configuration for Family Bank application.
 Formats logs as JSON for CloudWatch Logs Insights.
 """
+
 import logging
 import json
 import os
@@ -14,25 +15,25 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_data: Dict[str, Any] = {
-            'timestamp': datetime.utcfromtimestamp(record.created).isoformat() + 'Z',
-            'level': record.levelname,
-            'logger': record.name,
-            'message': record.getMessage(),
-            'function': record.funcName,
-            'line': record.lineno,
+            "timestamp": datetime.utcfromtimestamp(record.created).isoformat() + "Z",
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "function": record.funcName,
+            "line": record.lineno,
         }
 
         # Add exception info if present
         if record.exc_info:
-            log_data['exception'] = self.formatException(record.exc_info)
+            log_data["exception"] = self.formatException(record.exc_info)
 
         # Add custom fields if present
-        if hasattr(record, 'user_id'):
-            log_data['user_id'] = record.user_id
-        if hasattr(record, 'request_id'):
-            log_data['request_id'] = record.request_id
-        if hasattr(record, 'transaction_id'):
-            log_data['transaction_id'] = record.transaction_id
+        if hasattr(record, "user_id"):
+            log_data["user_id"] = record.user_id
+        if hasattr(record, "request_id"):
+            log_data["request_id"] = record.request_id
+        if hasattr(record, "transaction_id"):
+            log_data["transaction_id"] = record.transaction_id
 
         return json.dumps(log_data)
 
@@ -51,15 +52,15 @@ def get_logger(name: str) -> logging.Logger:
 
     # Only configure if not already configured
     if not logger.handlers:
-        level = os.environ.get('LOG_LEVEL', 'INFO')
+        level = os.environ.get("LOG_LEVEL", "INFO")
         logger.setLevel(level)
 
         handler = logging.StreamHandler()
 
         # Use JSON formatter for production, simple formatter for local dev
-        if os.environ.get('AWS_SAM_LOCAL') == 'true':
+        if os.environ.get("AWS_SAM_LOCAL") == "true":
             formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
             )
         else:
             formatter = JsonFormatter()

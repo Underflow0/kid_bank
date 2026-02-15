@@ -1,12 +1,18 @@
 """
 Unit tests for data models.
 """
+
 import pytest
 from decimal import Decimal
 from src.common.models import (
-    UserRole, TransactionType, CognitoGroup, KeyPattern,
-    UserProfile, Transaction,
-    DEFAULT_INTEREST_RATE, DEFAULT_CHILD_BALANCE
+    UserRole,
+    TransactionType,
+    CognitoGroup,
+    KeyPattern,
+    UserProfile,
+    Transaction,
+    DEFAULT_INTEREST_RATE,
+    DEFAULT_CHILD_BALANCE,
 )
 
 
@@ -67,20 +73,20 @@ class TestUserProfile:
             interest_rate=Decimal("0.05"),
             created_at="2024-01-01T00:00:00Z",
             updated_at="2024-01-01T00:00:00Z",
-            parent_id=None
+            parent_id=None,
         )
 
         result = profile.to_dict()
 
-        assert result['userId'] == "user-123"
-        assert result['email'] == "test@test.com"
-        assert result['name'] == "Test User"
-        assert result['role'] == "parent"
-        assert result['balance'] == 100.50
-        assert result['interestRate'] == 0.05
-        assert result['createdAt'] == "2024-01-01T00:00:00Z"
-        assert result['updatedAt'] == "2024-01-01T00:00:00Z"
-        assert result['parentId'] is None
+        assert result["userId"] == "user-123"
+        assert result["email"] == "test@test.com"
+        assert result["name"] == "Test User"
+        assert result["role"] == "parent"
+        assert result["balance"] == 100.50
+        assert result["interestRate"] == 0.05
+        assert result["createdAt"] == "2024-01-01T00:00:00Z"
+        assert result["updatedAt"] == "2024-01-01T00:00:00Z"
+        assert result["parentId"] is None
 
     def test_to_dict_with_parent_id(self):
         profile = UserProfile(
@@ -92,22 +98,22 @@ class TestUserProfile:
             interest_rate=Decimal("0.05"),
             created_at="2024-01-01T00:00:00Z",
             updated_at="2024-01-01T00:00:00Z",
-            parent_id="parent-123"
+            parent_id="parent-123",
         )
 
         result = profile.to_dict()
-        assert result['parentId'] == "parent-123"
+        assert result["parentId"] == "parent-123"
 
     def test_from_dynamodb_item(self):
         item = {
-            'userId': 'user-123',
-            'email': 'test@test.com',
-            'name': 'Test User',
-            'role': 'parent',
-            'balance': Decimal('100.50'),
-            'interestRate': Decimal('0.05'),
-            'createdAt': '2024-01-01T00:00:00Z',
-            'updatedAt': '2024-01-01T00:00:00Z',
+            "userId": "user-123",
+            "email": "test@test.com",
+            "name": "Test User",
+            "role": "parent",
+            "balance": Decimal("100.50"),
+            "interestRate": Decimal("0.05"),
+            "createdAt": "2024-01-01T00:00:00Z",
+            "updatedAt": "2024-01-01T00:00:00Z",
         }
 
         profile = UserProfile.from_dynamodb_item(item)
@@ -131,30 +137,30 @@ class TestTransaction:
             description="Test deposit",
             balance_after=Decimal("150.00"),
             initiated_by="parent-123",
-            timestamp="2024-01-01T00:00:00Z"
+            timestamp="2024-01-01T00:00:00Z",
         )
 
         result = txn.to_dict()
 
-        assert result['transactionId'] == "txn-123"
-        assert result['userId'] == "user-456"
-        assert result['amount'] == 50.00
-        assert result['type'] == "deposit"
-        assert result['description'] == "Test deposit"
-        assert result['balanceAfter'] == 150.00
-        assert result['initiatedBy'] == "parent-123"
-        assert result['timestamp'] == "2024-01-01T00:00:00Z"
+        assert result["transactionId"] == "txn-123"
+        assert result["userId"] == "user-456"
+        assert result["amount"] == 50.00
+        assert result["type"] == "deposit"
+        assert result["description"] == "Test deposit"
+        assert result["balanceAfter"] == 150.00
+        assert result["initiatedBy"] == "parent-123"
+        assert result["timestamp"] == "2024-01-01T00:00:00Z"
 
     def test_from_dynamodb_item(self):
         item = {
-            'transactionId': 'txn-123',
-            'userId': 'user-456',
-            'amount': Decimal('50.00'),
-            'type': 'deposit',
-            'description': 'Test deposit',
-            'balanceAfter': Decimal('150.00'),
-            'initiatedBy': 'parent-123',
-            'timestamp': '2024-01-01T00:00:00Z'
+            "transactionId": "txn-123",
+            "userId": "user-456",
+            "amount": Decimal("50.00"),
+            "type": "deposit",
+            "description": "Test deposit",
+            "balanceAfter": Decimal("150.00"),
+            "initiatedBy": "parent-123",
+            "timestamp": "2024-01-01T00:00:00Z",
         }
 
         txn = Transaction.from_dynamodb_item(item)
@@ -171,7 +177,7 @@ class TestTransaction:
 
 class TestConstants:
     def test_default_interest_rate(self):
-        assert DEFAULT_INTEREST_RATE == Decimal('0.05')
+        assert DEFAULT_INTEREST_RATE == Decimal("0.05")
 
     def test_default_child_balance(self):
-        assert DEFAULT_CHILD_BALANCE == Decimal('0.00')
+        assert DEFAULT_CHILD_BALANCE == Decimal("0.00")

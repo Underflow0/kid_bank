@@ -1,6 +1,7 @@
 """
 DynamoDB client with atomic transaction support for Family Bank application.
 """
+
 import boto3
 import os
 import uuid
@@ -11,9 +12,14 @@ from botocore.exceptions import ClientError
 from .errors import InsufficientFundsError, DatabaseError, NotFoundError, ConflictError
 from .logger import get_logger
 from .models import (
-    KeyPattern, UserProfile, Transaction, UserRole, TransactionType,
-    DEFAULT_INTEREST_RATE, DEFAULT_CHILD_BALANCE,
-    TRANSACTION_PAGINATION_LIMIT
+    KeyPattern,
+    UserProfile,
+    Transaction,
+    UserRole,
+    TransactionType,
+    DEFAULT_INTEREST_RATE,
+    DEFAULT_CHILD_BALANCE,
+    TRANSACTION_PAGINATION_LIMIT,
 )
 
 logger = get_logger(__name__)
@@ -23,21 +29,19 @@ class DynamoDBClient:
     """DynamoDB client for Family Bank application."""
 
     def __init__(self):
-        self.table_name = os.environ['DYNAMODB_TABLE_NAME']
+        self.table_name = os.environ["DYNAMODB_TABLE_NAME"]
 
         # Support for local DynamoDB
-        if os.environ.get('AWS_SAM_LOCAL') == 'true':
+        if os.environ.get("AWS_SAM_LOCAL") == "true":
             self.dynamodb = boto3.resource(
-                'dynamodb',
-                endpoint_url='http://dynamodb-local:8000'
+                "dynamodb", endpoint_url="http://dynamodb-local:8000"
             )
             self.client = boto3.client(
-                'dynamodb',
-                endpoint_url='http://dynamodb-local:8000'
+                "dynamodb", endpoint_url="http://dynamodb-local:8000"
             )
         else:
-            self.dynamodb = boto3.resource('dynamodb')
-            self.client = boto3.client('dynamodb')
+            self.dynamodb = boto3.resource("dynamodb")
+            self.client = boto3.client("dynamodb")
 
         self.table = self.dynamodb.Table(self.table_name)
 
@@ -53,12 +57,9 @@ class DynamoDBClient:
         """
         try:
             response = self.table.get_item(
-                Key={
-                    'PK': KeyPattern.user_pk(user_id),
-                    'SK': KeyPattern.profile_sk()
-                }
+                Key={"PK": KeyPattern.user_pk(user_id), "SK": KeyPattern.profile_sk()}
             )
-            return response.get('Item')
+            return response.get("Item")
         except ClientError as e:
             logger.error(f"Failed to get user profile: {str(e)}")
             raise DatabaseError(f"Failed to retrieve user profile: {str(e)}")
@@ -70,8 +71,8 @@ class DynamoDBClient:
         name: str,
         role: UserRole,
         parent_id: Optional[str] = None,
-        balance: Decimal = Decimal('0.00'),
-        interest_rate: Decimal = DEFAULT_INTEREST_RATE
+        balance: Decimal = Decimal("0.00"),
+        interest_rate: Decimal = DEFAULT_INTEREST_RATE,
     ) -> UserProfile:
         """
         Create a new user profile.
@@ -88,28 +89,28 @@ class DynamoDBClient:
         Returns:
             Created UserProfile
         """
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.utcnow().isoformat() + "Z"
 
         item = {
-            'PK': KeyPattern.user_pk(user_id),
-            'SK': KeyPattern.profile_sk(),
-            'userId': user_id,
-            'email': email,
-            'name': name,
-            'role': role.value,
-            'balance': balance,
-            'interestRate': interest_rate,
-            'createdAt': timestamp,
-            'updatedAt': timestamp,
+            "PK": KeyPattern.user_pk(user_id),
+            "SK": KeyPattern.profile_sk(),
+            "userId": user_id,
+            "email": email,
+            "name": name,
+            "role": role.value,
+            "balance": balance,
+            "interestRate": interest_rate,
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
         }
 
         # Add parent_id and GSI attributes for children
         if role == UserRole.CHILD and parent_id:
-            item['parentId'] = parent_id
-            item['GSI1PK'] = KeyPattern.parent_gsi1_pk(parent_id)
-            item['GSI1SK'] = KeyPattern.child_gsi1_sk(user_id)
-            item['GSI2PK'] = KeyPattern.role_gsi2_pk(UserRole.CHILD)
-            item['GSI2SK'] = KeyPattern.user_gsi2_sk(user_id)
+            item["parentId"] = parent_id
+            item["GSI1PK"] = KeyPattern.parent_gsi1_pk(parent_id)
+            item["GSI1SK"] = KeyPattern.child_gsi1_sk(user_id)
+            item["GSI2PK"] = KeyPattern.role_gsi2_pk(UserRole.CHILD)
+            item["GSI2SK"] = KeyPattern.user_gsi2_sk(user_id)
 
         try:
             self.table.put_item(Item=item)
@@ -123,7 +124,7 @@ class DynamoDBClient:
         self,
         user_id: str,
         name: Optional[str] = None,
-        interest_rate: Optional[Decimal] = None
+        interest_rate: Optional[Decimal] = None,
     ) -> Dict:
         """
         Update user profile fields.
@@ -136,31 +137,28 @@ class DynamoDBClient:
         Returns:
             Updated user profile dict
         """
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.utcnow().isoformat() + "Z"
 
-        update_expression_parts = ['updatedAt = :timestamp']
-        expression_values = {':timestamp': timestamp}
+        update_expression_parts = ["updatedAt = :timestamp"]
+        expression_values = {":timestamp": timestamp}
 
         if name is not None:
-            update_expression_parts.append('#name = :name')
-            expression_values[':name'] = name
+            update_expression_parts.append("#name = :name")
+            expression_values[":name"] = name
 
         if interest_rate is not None:
-            update_expression_parts.append('interestRate = :rate')
-            expression_values[':rate'] = interest_rate
+            update_expression_parts.append("interestRate = :rate")
+            expression_values[":rate"] = interest_rate
 
         try:
             response = self.table.update_item(
-                Key={
-                    'PK': KeyPattern.user_pk(user_id),
-                    'SK': KeyPattern.profile_sk()
-                },
-                UpdateExpression='SET ' + ', '.join(update_expression_parts),
-                ExpressionAttributeNames={'#name': 'name'} if name else None,
+                Key={"PK": KeyPattern.user_pk(user_id), "SK": KeyPattern.profile_sk()},
+                UpdateExpression="SET " + ", ".join(update_expression_parts),
+                ExpressionAttributeNames={"#name": "name"} if name else None,
                 ExpressionAttributeValues=expression_values,
-                ReturnValues='ALL_NEW'
+                ReturnValues="ALL_NEW",
             )
-            return response['Attributes']
+            return response["Attributes"]
         except ClientError as e:
             logger.error(f"Failed to update user profile: {str(e)}")
             raise DatabaseError(f"Failed to update user profile: {str(e)}")
@@ -177,13 +175,11 @@ class DynamoDBClient:
         """
         try:
             response = self.table.query(
-                IndexName='GSI1',
-                KeyConditionExpression='GSI1PK = :pk',
-                ExpressionAttributeValues={
-                    ':pk': KeyPattern.parent_gsi1_pk(parent_id)
-                }
+                IndexName="GSI1",
+                KeyConditionExpression="GSI1PK = :pk",
+                ExpressionAttributeValues={":pk": KeyPattern.parent_gsi1_pk(parent_id)},
             )
-            return response.get('Items', [])
+            return response.get("Items", [])
         except ClientError as e:
             logger.error(f"Failed to get children: {str(e)}")
             raise DatabaseError(f"Failed to retrieve children: {str(e)}")
@@ -192,7 +188,7 @@ class DynamoDBClient:
         self,
         user_id: str,
         limit: int = TRANSACTION_PAGINATION_LIMIT,
-        next_token: Optional[str] = None
+        next_token: Optional[str] = None,
     ) -> Dict:
         """
         Get transactions for a user.
@@ -206,38 +202,38 @@ class DynamoDBClient:
             Dict with 'transactions' list and optional 'nextToken'
         """
         query_params = {
-            'KeyConditionExpression': 'PK = :pk AND begins_with(SK, :sk)',
-            'ExpressionAttributeValues': {
-                ':pk': KeyPattern.user_pk(user_id),
-                ':sk': 'TRANS#'
+            "KeyConditionExpression": "PK = :pk AND begins_with(SK, :sk)",
+            "ExpressionAttributeValues": {
+                ":pk": KeyPattern.user_pk(user_id),
+                ":sk": "TRANS#",
             },
-            'Limit': limit,
-            'ScanIndexForward': False  # Most recent first
+            "Limit": limit,
+            "ScanIndexForward": False,  # Most recent first
         }
 
         if next_token:
             import json
             import base64
+
             try:
                 decoded = json.loads(base64.b64decode(next_token))
-                query_params['ExclusiveStartKey'] = decoded
+                query_params["ExclusiveStartKey"] = decoded
             except Exception as e:
                 logger.warning(f"Invalid pagination token: {str(e)}")
 
         try:
             response = self.table.query(**query_params)
 
-            result = {
-                'transactions': response.get('Items', [])
-            }
+            result = {"transactions": response.get("Items", [])}
 
-            if 'LastEvaluatedKey' in response:
+            if "LastEvaluatedKey" in response:
                 import json
                 import base64
+
                 encoded = base64.b64encode(
-                    json.dumps(response['LastEvaluatedKey']).encode()
+                    json.dumps(response["LastEvaluatedKey"]).encode()
                 ).decode()
-                result['nextToken'] = encoded
+                result["nextToken"] = encoded
 
             return result
 
@@ -251,7 +247,7 @@ class DynamoDBClient:
         amount: Decimal,
         transaction_type: TransactionType,
         description: str,
-        initiated_by: str
+        initiated_by: str,
     ) -> Dict:
         """
         Atomically adjust user balance and create transaction record.
@@ -273,7 +269,7 @@ class DynamoDBClient:
             DatabaseError: If transaction fails
             NotFoundError: If user not found
         """
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.utcnow().isoformat() + "Z"
         transaction_id = str(uuid.uuid4())
 
         # Get current balance
@@ -281,7 +277,7 @@ class DynamoDBClient:
         if not user_profile:
             raise NotFoundError(f"User {user_id} not found")
 
-        current_balance = Decimal(str(user_profile.get('balance', 0)))
+        current_balance = Decimal(str(user_profile.get("balance", 0)))
         new_balance = current_balance + amount
 
         # Prevent negative balance
@@ -298,45 +294,47 @@ class DynamoDBClient:
                 TransactItems=[
                     {
                         # Update user balance
-                        'Update': {
-                            'TableName': self.table_name,
-                            'Key': {
-                                'PK': {'S': KeyPattern.user_pk(user_id)},
-                                'SK': {'S': KeyPattern.profile_sk()}
+                        "Update": {
+                            "TableName": self.table_name,
+                            "Key": {
+                                "PK": {"S": KeyPattern.user_pk(user_id)},
+                                "SK": {"S": KeyPattern.profile_sk()},
                             },
-                            'UpdateExpression': (
-                                'SET balance = :new_balance, updatedAt = :timestamp'
+                            "UpdateExpression": (
+                                "SET balance = :new_balance, updatedAt = :timestamp"
                             ),
-                            'ConditionExpression': (
-                                'attribute_exists(PK) AND balance = :current_balance'
+                            "ConditionExpression": (
+                                "attribute_exists(PK) AND balance = :current_balance"
                             ),
-                            'ExpressionAttributeValues': {
-                                ':new_balance': {'N': str(new_balance)},
-                                ':current_balance': {'N': str(current_balance)},
-                                ':timestamp': {'S': timestamp}
-                            }
+                            "ExpressionAttributeValues": {
+                                ":new_balance": {"N": str(new_balance)},
+                                ":current_balance": {"N": str(current_balance)},
+                                ":timestamp": {"S": timestamp},
+                            },
                         }
                     },
                     {
                         # Create transaction record
-                        'Put': {
-                            'TableName': self.table_name,
-                            'Item': {
-                                'PK': {'S': KeyPattern.user_pk(user_id)},
-                                'SK': {'S': KeyPattern.transaction_sk(
-                                    timestamp, transaction_id
-                                )},
-                                'transactionId': {'S': transaction_id},
-                                'userId': {'S': user_id},
-                                'amount': {'N': str(amount)},
-                                'type': {'S': transaction_type.value},
-                                'description': {'S': description},
-                                'balanceAfter': {'N': str(new_balance)},
-                                'initiatedBy': {'S': initiated_by},
-                                'timestamp': {'S': timestamp}
-                            }
+                        "Put": {
+                            "TableName": self.table_name,
+                            "Item": {
+                                "PK": {"S": KeyPattern.user_pk(user_id)},
+                                "SK": {
+                                    "S": KeyPattern.transaction_sk(
+                                        timestamp, transaction_id
+                                    )
+                                },
+                                "transactionId": {"S": transaction_id},
+                                "userId": {"S": user_id},
+                                "amount": {"N": str(amount)},
+                                "type": {"S": transaction_type.value},
+                                "description": {"S": description},
+                                "balanceAfter": {"N": str(new_balance)},
+                                "initiatedBy": {"S": initiated_by},
+                                "timestamp": {"S": timestamp},
+                            },
                         }
-                    }
+                    },
                 ]
             )
 
@@ -347,22 +345,22 @@ class DynamoDBClient:
             )
 
             return {
-                'transactionId': transaction_id,
-                'userId': user_id,
-                'amount': float(amount),
-                'type': transaction_type.value,
-                'description': description,
-                'balanceAfter': float(new_balance),
-                'initiatedBy': initiated_by,
-                'timestamp': timestamp
+                "transactionId": transaction_id,
+                "userId": user_id,
+                "amount": float(amount),
+                "type": transaction_type.value,
+                "description": description,
+                "balanceAfter": float(new_balance),
+                "initiatedBy": initiated_by,
+                "timestamp": timestamp,
             }
 
         except self.client.exceptions.TransactionCanceledException as e:
             # Check cancellation reasons
-            reasons = e.response.get('CancellationReasons', [])
+            reasons = e.response.get("CancellationReasons", [])
             for reason in reasons:
-                code = reason.get('Code')
-                if code == 'ConditionalCheckFailed':
+                code = reason.get("Code")
+                if code == "ConditionalCheckFailed":
                     logger.warning(
                         f"Balance changed during transaction for user {user_id}. "
                         "Possible concurrent modification."
@@ -386,50 +384,50 @@ class DynamoDBClient:
         Returns:
             List of child profile dicts
         """
-        use_gsi = os.environ.get('USE_ROLE_GSI', 'true').lower() == 'true'
+        use_gsi = os.environ.get("USE_ROLE_GSI", "true").lower() == "true"
 
         try:
             if use_gsi:
                 # Use GSI2 for better performance
                 items = []
                 query_params = {
-                    'IndexName': 'GSI2',
-                    'KeyConditionExpression': 'GSI2PK = :pk',
-                    'ExpressionAttributeValues': {
-                        ':pk': KeyPattern.role_gsi2_pk(UserRole.CHILD)
-                    }
+                    "IndexName": "GSI2",
+                    "KeyConditionExpression": "GSI2PK = :pk",
+                    "ExpressionAttributeValues": {
+                        ":pk": KeyPattern.role_gsi2_pk(UserRole.CHILD)
+                    },
                 }
 
                 while True:
                     response = self.table.query(**query_params)
-                    items.extend(response.get('Items', []))
+                    items.extend(response.get("Items", []))
 
-                    if 'LastEvaluatedKey' not in response:
+                    if "LastEvaluatedKey" not in response:
                         break
 
-                    query_params['ExclusiveStartKey'] = response['LastEvaluatedKey']
+                    query_params["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
                 return items
             else:
                 # Fallback to scan with filter
                 items = []
                 scan_params = {
-                    'FilterExpression': '#role = :role AND SK = :sk',
-                    'ExpressionAttributeNames': {'#role': 'role'},
-                    'ExpressionAttributeValues': {
-                        ':role': UserRole.CHILD.value,
-                        ':sk': KeyPattern.profile_sk()
-                    }
+                    "FilterExpression": "#role = :role AND SK = :sk",
+                    "ExpressionAttributeNames": {"#role": "role"},
+                    "ExpressionAttributeValues": {
+                        ":role": UserRole.CHILD.value,
+                        ":sk": KeyPattern.profile_sk(),
+                    },
                 }
 
                 while True:
                     response = self.table.scan(**scan_params)
-                    items.extend(response.get('Items', []))
+                    items.extend(response.get("Items", []))
 
-                    if 'LastEvaluatedKey' not in response:
+                    if "LastEvaluatedKey" not in response:
                         break
 
-                    scan_params['ExclusiveStartKey'] = response['LastEvaluatedKey']
+                    scan_params["ExclusiveStartKey"] = response["LastEvaluatedKey"]
 
                 return items
 

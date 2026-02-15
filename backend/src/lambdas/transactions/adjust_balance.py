@@ -2,13 +2,14 @@
 Lambda function to adjust child's balance (parent only).
 POST /adjust-balance
 """
+
 import json
 import sys
 import os
 from decimal import Decimal
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import (
     authorize,
@@ -19,13 +20,13 @@ from common import (
     BadRequestError,
     ForbiddenError,
     NotFoundError,
-    TransactionType
+    TransactionType,
 )
 
 logger = get_logger(__name__)
 
 
-@authorize(required_groups=['Parents'])
+@authorize(required_groups=["Parents"])
 def lambda_handler(event, context):
     """
     Adjust a child's balance atomically.
@@ -50,13 +51,13 @@ def lambda_handler(event, context):
     try:
         # Get authenticated parent ID
         auth_context = get_auth_context(event)
-        parent_id = auth_context['userId']
+        parent_id = auth_context["userId"]
 
         # Parse request body
-        body = json.loads(event.get('body', '{}'))
-        child_id = body.get('childId')
-        amount = body.get('amount')
-        description = body.get('description', 'Balance adjustment')
+        body = json.loads(event.get("body", "{}"))
+        child_id = body.get("childId")
+        amount = body.get("amount")
+        description = body.get("description", "Balance adjustment")
 
         # Validate input
         if not child_id:
@@ -86,7 +87,7 @@ def lambda_handler(event, context):
         if not child:
             raise NotFoundError(f"Child {child_id} not found")
 
-        if child.get('parentId') != parent_id:
+        if child.get("parentId") != parent_id:
             raise ForbiddenError("You can only adjust your own children's balances")
 
         # Adjust balance with atomic transaction
@@ -95,7 +96,7 @@ def lambda_handler(event, context):
             amount=amount,
             transaction_type=TransactionType.ADJUSTMENT,
             description=description,
-            initiated_by=parent_id
+            initiated_by=parent_id,
         )
 
         logger.info(
@@ -104,35 +105,34 @@ def lambda_handler(event, context):
         )
 
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({
-                'transaction': transaction,
-                'message': 'Balance adjusted successfully'
-            })
+            "body": json.dumps(
+                {"transaction": transaction, "message": "Balance adjusted successfully"}
+            ),
         }
 
     except FamilyBankError as e:
         logger.warning(f"Business logic error: {str(e)}")
         return {
-            'statusCode': e.status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": e.status_code,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': e.message})
+            "body": json.dumps({"error": e.message}),
         }
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': 'Internal server error'})
+            "body": json.dumps({"error": "Internal server error"}),
         }

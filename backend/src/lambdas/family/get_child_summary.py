@@ -2,12 +2,13 @@
 Lambda function to get child summary with recent transactions.
 GET /children/{childId}
 """
+
 import json
 import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import (
     authorize,
@@ -16,13 +17,13 @@ from common import (
     get_logger,
     FamilyBankError,
     NotFoundError,
-    ForbiddenError
+    ForbiddenError,
 )
 
 logger = get_logger(__name__)
 
 
-@authorize(required_groups=['Parents'])
+@authorize(required_groups=["Parents"])
 def lambda_handler(event, context):
     """
     Get detailed summary for a specific child including recent transactions.
@@ -39,10 +40,10 @@ def lambda_handler(event, context):
     try:
         # Get authenticated parent ID
         auth_context = get_auth_context(event)
-        parent_id = auth_context['userId']
+        parent_id = auth_context["userId"]
 
         # Get child ID from path parameters
-        child_id = event.get('pathParameters', {}).get('childId')
+        child_id = event.get("pathParameters", {}).get("childId")
         if not child_id:
             raise NotFoundError("Child ID not provided")
 
@@ -55,62 +56,64 @@ def lambda_handler(event, context):
         if not child_profile:
             raise NotFoundError(f"Child {child_id} not found")
 
-        if child_profile.get('parentId') != parent_id:
+        if child_profile.get("parentId") != parent_id:
             raise ForbiddenError("You can only view your own children's summaries")
 
         # Get recent transactions (last 10)
         transactions_result = db.get_transactions(child_id, limit=10)
-        transactions = transactions_result['transactions']
+        transactions = transactions_result["transactions"]
 
         # Format response
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({
-                'child': {
-                    'userId': child_profile['userId'],
-                    'name': child_profile['name'],
-                    'email': child_profile['email'],
-                    'balance': float(child_profile['balance']),
-                    'interestRate': float(child_profile['interestRate']),
-                    'createdAt': child_profile['createdAt'],
-                    'updatedAt': child_profile['updatedAt']
-                },
-                'recentTransactions': [
-                    {
-                        'transactionId': tx['transactionId'],
-                        'amount': float(tx['amount']),
-                        'type': tx['type'],
-                        'description': tx['description'],
-                        'balanceAfter': float(tx['balanceAfter']),
-                        'timestamp': tx['timestamp']
-                    }
-                    for tx in transactions
-                ]
-            })
+            "body": json.dumps(
+                {
+                    "child": {
+                        "userId": child_profile["userId"],
+                        "name": child_profile["name"],
+                        "email": child_profile["email"],
+                        "balance": float(child_profile["balance"]),
+                        "interestRate": float(child_profile["interestRate"]),
+                        "createdAt": child_profile["createdAt"],
+                        "updatedAt": child_profile["updatedAt"],
+                    },
+                    "recentTransactions": [
+                        {
+                            "transactionId": tx["transactionId"],
+                            "amount": float(tx["amount"]),
+                            "type": tx["type"],
+                            "description": tx["description"],
+                            "balanceAfter": float(tx["balanceAfter"]),
+                            "timestamp": tx["timestamp"],
+                        }
+                        for tx in transactions
+                    ],
+                }
+            ),
         }
 
     except FamilyBankError as e:
         logger.warning(f"Business logic error: {str(e)}")
         return {
-            'statusCode': e.status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": e.status_code,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': e.message})
+            "body": json.dumps({"error": e.message}),
         }
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': 'Internal server error'})
+            "body": json.dumps({"error": "Internal server error"}),
         }

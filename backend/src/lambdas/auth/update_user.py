@@ -2,13 +2,14 @@
 Lambda function to update user profile.
 POST /user
 """
+
 import json
 import sys
 import os
 from decimal import Decimal
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import (
     authorize,
@@ -18,7 +19,7 @@ from common import (
     get_logger,
     FamilyBankError,
     BadRequestError,
-    ForbiddenError
+    ForbiddenError,
 )
 
 logger = get_logger(__name__)
@@ -47,18 +48,20 @@ def lambda_handler(event, context):
     try:
         # Get authenticated user
         auth_context = get_auth_context(event)
-        current_user_id = auth_context['userId']
-        groups = auth_context['groups']
+        current_user_id = auth_context["userId"]
+        groups = auth_context["groups"]
 
         # Parse request body
-        body = json.loads(event.get('body', '{}'))
-        target_user_id = body.get('userId', current_user_id)
-        name = body.get('name')
-        interest_rate = body.get('interestRate')
+        body = json.loads(event.get("body", "{}"))
+        target_user_id = body.get("userId", current_user_id)
+        name = body.get("name")
+        interest_rate = body.get("interestRate")
 
         # Validate at least one field to update
         if name is None and interest_rate is None:
-            raise BadRequestError("At least one of 'name' or 'interestRate' must be provided")
+            raise BadRequestError(
+                "At least one of 'name' or 'interestRate' must be provided"
+            )
 
         # Authorization checks
         db = DynamoDBClient()
@@ -73,7 +76,7 @@ def lambda_handler(event, context):
             if not target_profile:
                 raise BadRequestError(f"User {target_user_id} not found")
 
-            if target_profile.get('parentId') != current_user_id:
+            if target_profile.get("parentId") != current_user_id:
                 raise ForbiddenError("You can only update your own children's profiles")
 
         # Children cannot set interest rate
@@ -83,52 +86,54 @@ def lambda_handler(event, context):
         # Update profile
         update_params = {}
         if name:
-            update_params['name'] = name
+            update_params["name"] = name
         if interest_rate is not None:
-            update_params['interest_rate'] = Decimal(str(interest_rate))
+            update_params["interest_rate"] = Decimal(str(interest_rate))
 
         updated_profile = db.update_user_profile(target_user_id, **update_params)
 
         logger.info(f"Updated profile for user: {target_user_id}")
 
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({
-                'user': {
-                    'userId': updated_profile['userId'],
-                    'email': updated_profile['email'],
-                    'name': updated_profile['name'],
-                    'role': updated_profile['role'],
-                    'balance': float(updated_profile['balance']),
-                    'interestRate': float(updated_profile['interestRate']),
-                    'parentId': updated_profile.get('parentId'),
-                    'updatedAt': updated_profile['updatedAt']
+            "body": json.dumps(
+                {
+                    "user": {
+                        "userId": updated_profile["userId"],
+                        "email": updated_profile["email"],
+                        "name": updated_profile["name"],
+                        "role": updated_profile["role"],
+                        "balance": float(updated_profile["balance"]),
+                        "interestRate": float(updated_profile["interestRate"]),
+                        "parentId": updated_profile.get("parentId"),
+                        "updatedAt": updated_profile["updatedAt"],
+                    }
                 }
-            })
+            ),
         }
 
     except FamilyBankError as e:
         logger.warning(f"Business logic error: {str(e)}")
         return {
-            'statusCode': e.status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": e.status_code,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': e.message})
+            "body": json.dumps({"error": e.message}),
         }
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
             },
-            'body': json.dumps({'error': 'Internal server error'})
+            "body": json.dumps({"error": "Internal server error"}),
         }

@@ -2,6 +2,7 @@
 Authentication and authorization utilities for Family Bank application.
 Handles JWT verification and group-based authorization.
 """
+
 import json
 import os
 import time
@@ -37,12 +38,12 @@ def get_jwks() -> Dict:
         return _jwks_cache
 
     # Fetch new JWKS
-    cognito_region = os.environ['COGNITO_REGION']
-    user_pool_id = os.environ['COGNITO_USER_POOL_ID']
+    cognito_region = os.environ["COGNITO_REGION"]
+    user_pool_id = os.environ["COGNITO_USER_POOL_ID"]
 
     jwks_url = (
-        f'https://cognito-idp.{cognito_region}.amazonaws.com/'
-        f'{user_pool_id}/.well-known/jwks.json'
+        f"https://cognito-idp.{cognito_region}.amazonaws.com/"
+        f"{user_pool_id}/.well-known/jwks.json"
     )
 
     try:
@@ -74,9 +75,9 @@ def verify_jwt(token: str) -> dict:
     Raises:
         UnauthorizedError: If token is invalid or expired
     """
-    cognito_region = os.environ['COGNITO_REGION']
-    user_pool_id = os.environ['COGNITO_USER_POOL_ID']
-    client_id = os.environ['COGNITO_CLIENT_ID']
+    cognito_region = os.environ["COGNITO_REGION"]
+    user_pool_id = os.environ["COGNITO_USER_POOL_ID"]
+    client_id = os.environ["COGNITO_CLIENT_ID"]
 
     try:
         # Get JWKS
@@ -84,12 +85,12 @@ def verify_jwt(token: str) -> dict:
 
         # Get the key ID from token header
         unverified_header = jwt.get_unverified_header(token)
-        kid = unverified_header['kid']
+        kid = unverified_header["kid"]
 
         # Find the matching key in JWKS
         key = None
-        for jwk in jwks['keys']:
-            if jwk['kid'] == kid:
+        for jwk in jwks["keys"]:
+            if jwk["kid"] == kid:
                 key = jwk
                 break
 
@@ -97,24 +98,24 @@ def verify_jwt(token: str) -> dict:
             raise UnauthorizedError("Public key not found in JWKS")
 
         # Verify the token
-        issuer = f'https://cognito-idp.{cognito_region}.amazonaws.com/{user_pool_id}'
+        issuer = f"https://cognito-idp.{cognito_region}.amazonaws.com/{user_pool_id}"
 
         payload = jwt.decode(
             token,
             key,
-            algorithms=['RS256'],
+            algorithms=["RS256"],
             audience=client_id,
             issuer=issuer,
             options={
-                'verify_signature': True,
-                'verify_exp': True,
-                'verify_aud': True,
-                'verify_iss': True,
-            }
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_aud": True,
+                "verify_iss": True,
+            },
         )
 
         # Verify token_use claim
-        if payload.get('token_use') != 'id':
+        if payload.get("token_use") != "id":
             raise UnauthorizedError("Token is not an ID token")
 
         return payload
@@ -123,7 +124,9 @@ def verify_jwt(token: str) -> dict:
         logger.warning(f"JWT verification failed: {str(e)}")
         raise UnauthorizedError(f"Invalid token: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error during JWT verification: {str(e)}", exc_info=True)
+        logger.error(
+            f"Unexpected error during JWT verification: {str(e)}", exc_info=True
+        )
         raise UnauthorizedError("Token verification failed")
 
 
@@ -137,7 +140,7 @@ def get_user_groups(token_payload: dict) -> List[str]:
     Returns:
         List of group names
     """
-    return token_payload.get('cognito:groups', [])
+    return token_payload.get("cognito:groups", [])
 
 
 def get_user_id(token_payload: dict) -> str:
@@ -150,7 +153,7 @@ def get_user_id(token_payload: dict) -> str:
     Returns:
         User ID (UUID)
     """
-    return token_payload.get('sub')
+    return token_payload.get("sub")
 
 
 def get_user_email(token_payload: dict) -> str:
@@ -163,7 +166,7 @@ def get_user_email(token_payload: dict) -> str:
     Returns:
         User email
     """
-    return token_payload.get('email', '')
+    return token_payload.get("email", "")
 
 
 def is_parent(groups: List[str]) -> bool:
@@ -198,24 +201,23 @@ def authorize(required_groups: Optional[List[str]] = None):
         - email: User email
         - claims: Full JWT payload
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(event, context):
             try:
                 # Extract token from Authorization header
-                headers = event.get('headers', {})
+                headers = event.get("headers", {})
 
                 # Handle case-insensitive headers (API Gateway may lowercase)
                 auth_header = (
-                    headers.get('Authorization') or
-                    headers.get('authorization') or
-                    ''
+                    headers.get("Authorization") or headers.get("authorization") or ""
                 )
 
-                if not auth_header.startswith('Bearer '):
+                if not auth_header.startswith("Bearer "):
                     raise UnauthorizedError("Missing or invalid Authorization header")
 
-                token = auth_header.replace('Bearer ', '')
+                token = auth_header.replace("Bearer ", "")
 
                 # Verify JWT
                 payload = verify_jwt(token)
@@ -236,13 +238,13 @@ def authorize(required_groups: Optional[List[str]] = None):
                         )
 
                 # Add auth context to event for downstream use
-                if 'requestContext' not in event:
-                    event['requestContext'] = {}
-                event['requestContext']['authorizer'] = {
-                    'userId': user_id,
-                    'groups': groups,
-                    'email': email,
-                    'claims': payload
+                if "requestContext" not in event:
+                    event["requestContext"] = {}
+                event["requestContext"]["authorizer"] = {
+                    "userId": user_id,
+                    "groups": groups,
+                    "email": email,
+                    "claims": payload,
                 }
 
                 # Call the actual handler
@@ -251,25 +253,28 @@ def authorize(required_groups: Optional[List[str]] = None):
             except (UnauthorizedError, ForbiddenError) as e:
                 logger.warning(f"Authorization failed: {str(e)}")
                 return {
-                    'statusCode': e.status_code,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
+                    "statusCode": e.status_code,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
                     },
-                    'body': json.dumps({'error': e.message})
+                    "body": json.dumps({"error": e.message}),
                 }
             except Exception as e:
-                logger.error(f"Unexpected error in authorization: {str(e)}", exc_info=True)
+                logger.error(
+                    f"Unexpected error in authorization: {str(e)}", exc_info=True
+                )
                 return {
-                    'statusCode': 500,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
+                    "statusCode": 500,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
                     },
-                    'body': json.dumps({'error': 'Internal server error'})
+                    "body": json.dumps({"error": "Internal server error"}),
                 }
 
         return wrapper
+
     return decorator
 
 
@@ -283,4 +288,4 @@ def get_auth_context(event: dict) -> dict:
     Returns:
         Auth context dict with userId, groups, email, claims
     """
-    return event.get('requestContext', {}).get('authorizer', {})
+    return event.get("requestContext", {}).get("authorizer", {})
