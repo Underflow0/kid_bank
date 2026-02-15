@@ -1,0 +1,18 @@
+# Testing dependencies
+pytest>=7.0.0,<8.0.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+pytest-asyncio>=0.23.0
+
+# AWS mocking
+moto[dynamodb,cognitoidp]>=5.0.0
+
+# Code quality
+black>=24.1.0
+flake8>=7.0.0
+mypy>=1.8.0
+
+# Additional testing utilities
+faker>=22.0.0
+freezegun>=1.4.0
+responses>=0.25.0
