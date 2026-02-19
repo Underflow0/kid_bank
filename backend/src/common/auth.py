@@ -120,6 +120,8 @@ def verify_jwt(token: str) -> dict:
 
         return payload
 
+    except UnauthorizedError:
+        raise
     except JWTError as e:
         logger.warning(f"JWT verification failed: {str(e)}")
         raise UnauthorizedError(f"Invalid token: {str(e)}")

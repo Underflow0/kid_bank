@@ -51,9 +51,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Fetch user profile from API
       const userProfile = await apiService.getUser();
       setUser(userProfile);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching user:', err);
-      setError(err.error || err.message || 'Failed to fetch user');
+      const e = err as { error?: string; message?: string };
+      setError(e.error || e.message || 'Failed to fetch user');
       setAuthUser(null);
       setUser(null);
     } finally {
@@ -79,9 +80,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAuthUser(null);
       setUser(null);
       window.location.href = '/';
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error signing out:', err);
-      setError(err.error || 'Failed to sign out');
+      const e = err as { error?: string };
+      setError(e.error || 'Failed to sign out');
     }
   };
 
@@ -105,6 +107,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {

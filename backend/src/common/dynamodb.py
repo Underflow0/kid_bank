@@ -150,14 +150,17 @@ class DynamoDBClient:
             update_expression_parts.append("interestRate = :rate")
             expression_values[":rate"] = interest_rate
 
+        update_kwargs = {
+            "Key": {"PK": KeyPattern.user_pk(user_id), "SK": KeyPattern.profile_sk()},
+            "UpdateExpression": "SET " + ", ".join(update_expression_parts),
+            "ExpressionAttributeValues": expression_values,
+            "ReturnValues": "ALL_NEW",
+        }
+        if name is not None:
+            update_kwargs["ExpressionAttributeNames"] = {"#name": "name"}
+
         try:
-            response = self.table.update_item(
-                Key={"PK": KeyPattern.user_pk(user_id), "SK": KeyPattern.profile_sk()},
-                UpdateExpression="SET " + ", ".join(update_expression_parts),
-                ExpressionAttributeNames={"#name": "name"} if name else None,
-                ExpressionAttributeValues=expression_values,
-                ReturnValues="ALL_NEW",
-            )
+            response = self.table.update_item(**update_kwargs)
             return response["Attributes"]
         except ClientError as e:
             logger.error(f"Failed to update user profile: {str(e)}")
