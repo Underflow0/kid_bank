@@ -24,6 +24,7 @@ from .models import (
     Transaction,
     DEFAULT_INTEREST_RATE,
     DEFAULT_CHILD_BALANCE,
+    MAX_TRANSACTION_PAGINATION_LIMIT,
 )
 
 __all__ = [
@@ -49,4 +50,5 @@ __all__ = [
     "Transaction",
     "DEFAULT_INTEREST_RATE",
     "DEFAULT_CHILD_BALANCE",
+    "MAX_TRANSACTION_PAGINATION_LIMIT",
 ]

@@ -8,7 +8,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.12'
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
 
 jobs:
   backend-tests:
@@ -54,7 +54,7 @@ jobs:
       - name: Run unit tests with coverage
         working-directory: backend
         env:
-          PYTHONPATH: ${{ github.workspace }}/backend/src
+          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
           # Skip Lambda handler tests that have mocking issues (to be fixed in integration tests)
           pytest tests/unit/ -v \

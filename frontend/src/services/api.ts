@@ -1,7 +1,7 @@
 /**
  * API service layer - handles all backend API calls
  */
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { type AxiosInstance, AxiosError } from 'axios';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import type {
   User,

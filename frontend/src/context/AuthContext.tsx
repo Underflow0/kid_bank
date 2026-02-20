@@ -1,7 +1,7 @@
 /**
  * Authentication Context - manages auth state across the app
  */
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { getCurrentUser, signOut, fetchAuthSession } from 'aws-amplify/auth';
 import type { User, AuthUser } from '../types';
 import { apiService } from '../services/api';

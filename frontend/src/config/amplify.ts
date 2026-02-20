@@ -2,8 +2,9 @@
  * AWS Amplify configuration
  */
 import { Amplify } from 'aws-amplify';
+import type { ResourcesConfig } from 'aws-amplify';
 
-const amplifyConfig = {
+const amplifyConfig: ResourcesConfig = {
   Auth: {
     Cognito: {
       userPoolId: import.meta.env.VITE_USER_POOL_ID || '',
